@@ -27,8 +27,8 @@ class Wave_DB_Query{
 	const JOIN_RIGHT	= 'RIGHT JOIN';
 	
 	
-	const WHERE_AND		= 'AND';
-	const WHERE_OR		= 'OR';
+	const WHERE_AND			= 'AND';
+	const WHERE_OR			= 'OR';
 	
 	const TABLE_ALIAS_SPLIT = '__';
 	
@@ -283,9 +283,9 @@ class Wave_DB_Query{
 	public function execute($debug = false){
 		
 		$sql = $this->buildSQL();
-		
+		//echo $sql;
 		$statement = $this->database->getConnection()->prepare($sql);	
-
+		
 		$start = microtime(true);
 		$statement->execute( $this->_params );
 		$time = microtime(true) - $start;           
@@ -331,10 +331,14 @@ class Wave_DB_Query{
 			if($this->_last_row === false) return null;			
 			$row = new $primary_object($this->_last_row, $primary_object.self::TABLE_ALIAS_SPLIT);
 
+			$loaded_relation_cache = array();
+
 			for(;;) {				
 				//Load in relations.
 				foreach($this->with as $with){
 					
+					if(!isset($loaded_relation_cache['foreign_table'])) $loaded_relation_cache['foreign_table'] = array();
+
 					$joined_object = new $with['foreign_class']($this->_last_row, $with['class'].self::TABLE_ALIAS_SPLIT);
 					
 					// if the joined bit is empty, put an empty value in the parent
@@ -342,6 +346,10 @@ class Wave_DB_Query{
 						continue;
 					};
 					
+					if(!isset($loaded_relation_cache['foreign_table'][$joined_object->id]))
+						$loaded_relation_cache['foreign_table'][$joined_object->id] = true;
+					else continue;
+
 					if($joined_object->_isLoaded()){
 
 						switch($with['relation']['relation_type']){
@@ -376,7 +384,14 @@ class Wave_DB_Query{
 				
 				$new_row = $this->_statement->fetch(Wave_DB_Connection::FETCH_ASSOC);
 				//Kill loop when all join rows are taken out.
-				foreach($primary_object::_getKeys(Wave_DB_Column::INDEX_PRIMARY) as $pk){
+				
+				$primary_keys = $primary_object::_getKeys(Wave_DB_Column::INDEX_PRIMARY);
+				
+				if(!isset($primary_keys[0]))
+					break;
+					
+				foreach($primary_keys as $pk){					
+					
 					$index = $primary_object.self::TABLE_ALIAS_SPLIT.$pk;
 					if($this->_last_row[$index] !== $new_row[$index])
 						break 2; //kill for(;;) loop

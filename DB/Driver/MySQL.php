@@ -62,6 +62,7 @@ class Wave_DB_Driver_MySQL extends Wave_DB_Driver implements Wave_DB_IDriver {
 			case 'tinyint':
 				return Wave_DB_Column::TYPE_BOOL;
 			
+			case 'datetime':
 			case 'timestamp':
 				return Wave_DB_Column::TYPE_TIMESTAMP;
 			
@@ -94,6 +95,20 @@ class Wave_DB_Driver_MySQL extends Wave_DB_Driver implements Wave_DB_IDriver {
 				return 'false';
 			case 'YES':
 				return 'true';
+		}
+	}
+	
+	public static function convertValueForSQL($value){
+	
+		switch(true){
+			case is_null($value):
+				return null;
+
+			case $value instanceof DateTime:
+				return $value->format('Y-m-d H:i:s');
+
+			default:
+				return $value;
 		}
 	}
 	
