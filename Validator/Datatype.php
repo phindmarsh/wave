@@ -60,13 +60,17 @@ abstract class Wave_Validator_Datatype {
 	
 	protected function checkLength($limit, $comparator = self::LENGTH_GT, $datatype = null){
 		// establish a comparator
-		if($datatype == null){
-			if($this->params['type'] == self::TYPE_ARRAY || is_array($this->input))
-				$datatype = self::COMPARATOR_ARRAY;
-			else if($this->params['type'] == self::TYPE_INT || is_numeric($this->input))
-				$datatype = self::COMPARATOR_NUMERIC;
-			else if($this->params['type'] == self::TYPE_STRING || is_string($this->input))
-				$datatype = self::COMPARATOR_STRING;
+		if ($datatype == null) {
+			if (isset($this->params['type'])) {
+				if     ($this->params['type'] === self::TYPE_ARRAY)  { $datatype = self::COMPARATOR_ARRAY;   }
+				elseif ($this->params['type'] === self::TYPE_INT)    { $datatype = self::COMPARATOR_NUMERIC; }
+				elseif ($this->params['type'] === self::TYPE_STRING) { $datatype = self::COMPARATOR_STRING;  }
+			} else {
+				// try to guess if not specified
+				if     (is_array($this->input))   { $datatype = self::COMPARATOR_ARRAY;   }
+				elseif (is_numeric($this->input)) { $datatype = self::COMPARATOR_NUMERIC; }
+				elseif (is_string($this->input))  { $datatype = self::COMPARATOR_STRING;  }
+			}
 		}
 		
 		// based on the comparator deduce the correct count to compare
