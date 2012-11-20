@@ -17,11 +17,11 @@ class Wave_Auth {
 	
 	public static $_is_loaded = false;
 	
-	public static function registerHandler($class){
+	public static function registerHandler($class, $autoload = true){
 		if(!class_implements($class))
 			throw new Wave_Exception('Auth Handler class ('.$class.') must implement Wave_IAuthable');
 		
-		$class::loadPersistentAuth();
+		if($autoload) $class::loadPersistentAuth();
 		
 		self::$_handler = $class;
 		
@@ -70,7 +70,7 @@ class Wave_Auth {
 		return Wave_Registry::store('__wave_identity', $identity);
 	}
 	
-		public static function deregisterIdentity($identity){
+	public static function deregisterIdentity(){
 		return Wave_Registry::destroy('__wave_identity');
 	}
 		
@@ -88,7 +88,9 @@ class Wave_Auth {
 				$identity,
 				strtotime($expires),
 				$config->cookie->path,
-				$config->cookie->domain
+				$config->cookie->domain,
+				isset($config->cookie->secure) ? $config->cookie->secure : false,
+				isset($config->cookie->httponly) ? $config->cookie->httponly : true
 			);
 		}
 				

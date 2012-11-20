@@ -16,8 +16,8 @@ class Wave_DB {
 	
 		$this->connection = new Wave_DB_Connection($config);
 		$this->config = $config;
-		
-		if(Wave_Core::$_MODE == Wave_Core::MODE_DEVELOPMENT)
+
+		if(in_array(Wave_Core::$_MODE, array(Wave_Core::MODE_DEVELOPMENT, Wave_Core::MODE_TEST)))
 			$this->connection->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 	}
 	
@@ -37,36 +37,33 @@ class Wave_DB {
 		}
 		
 	}
-
-	//CRUDE IMPLEMENTATION TO BE REPLACED   vvvvvvvv (euphemism?)
+	
+	
+	
 	public static function insert($object){
 	
-		$schema = $object::_getSchemaName();
-		$db = self::get($schema)->getConnection();
-	
 		$table = $object::_getTableName();
-		$data = $object->_getDataArray();
-		
-		$values = '';
-		foreach($data as $key => $value){
-			if($value === null || (is_string($value) && $value === ''))
-				$values .= 'NULL,';
-			elseif($value instanceof DateTime)
-				$values .= '"'.$value->format('Y-m-d H:i:s').'",';
-			else
-				$values .= '"'.addslashes($value).'",';
+		$data = array();
+		$object_data = $object->_getDataArray();
+		foreach(array_keys($object->_getFields()) as $field){
+			if(isset($object_data[$field]))
+				$data[$field] = $object_data[$field];
 		}
-			
-		$fields = '`'.implode('`,`', array_keys($data)).'`';
-		$values = trim($values,',');
-					
-		$sql = "INSERT INTO `$table` ($fields) VALUES ($values)";
+
+		$schema = $object::_getSchemaName();
+		$conn = self::get($schema)->getConnection();
 		
-		// WHAT THE HELL, SOMEONE PUT A GROSS ON HERE
+		$params = array();
+		$values = array_map(array($conn->getDriverClass(), 'convertValueForSQL'), array_values($data));
+							
+		$fields = implode('`,`', array_keys($data));
+		$placeholders = implode(',', array_fill(0, count($values), '?'));
 		
-		$db->exec($sql);
+		$sql = sprintf('INSERT INTO `%s` (`%s`) VALUES (%s)', $table, $fields, $placeholders);
 		
-		$liid = $db->lastInsertId();
+		$conn->prepare($sql)->execute($values);
+		
+		$liid = intval($conn->lastInsertId());
 		if($liid !== 0){
 			$keys = $object::_getKeys(Wave_DB_Column::INDEX_PRIMARY);
 			if(count($keys) === 1){
@@ -75,67 +72,90 @@ class Wave_DB {
 			}
 		}
 			
+		return $object->_isLoaded();
+	}
+	
+	public static function update($object){
+		
+		$keys = $object::_getKeys(Wave_DB_Column::INDEX_PRIMARY);
+		$table = $object::_getTableName();
+		$schema = $object::_getSchemaName();
+		
+		if(count($keys) === 0)
+			throw new Wave_Exception("No primary key defined for $schema.");
+		
+		$dirty = $object->_getDirtyArray();
+		$data = $object->_getDataArray();
+		$fields = $object->_getFields();
+		
+		$conn = self::get($schema)->getConnection();
+		
+		$updates = array();
+		$params = array();
+		$driver_class = $conn->getDriverClass();
+		foreach($dirty as $key => $value){
+			if(!isset($fields[$key])) continue;
+			
+			$updates[] = "`$key` = ?";
+			$params[] = $driver_class::convertValueForSQL($data[$key]);
+		}
+		
+		$where = array();
+		foreach($keys as $key){
+			$where[] = "`$key` = ?";
+			$params[] = $object->$key;
+		}
+		
+		if(!isset($updates[0])) return false;
+		
+		$sql = sprintf('UPDATE `%s` SET %s WHERE %s LIMIT 1;', $table, implode(',', $updates), implode(' AND ', $where));
+		$conn->prepare($sql)->execute($params);
+			
+		return true;
+	}
+
+	public static function delete(&$object){
+	
+		$keys = $object::_getKeys(Wave_DB_Column::INDEX_PRIMARY);
+		$table = $object::_getTableName();
+		$schema = $object::_getSchemaName();
+		
+		if(count($keys) === 0)
+			throw new Wave_Exception("No primary key defined for $schema.");
+		
+		$conn = self::get($schema)->getConnection();
+		
+		$params = array();
+		$where = array();
+		foreach($keys as $key){
+			$where[] = "`$key` = ?";
+			$params[] = $object->$key;
+		}
+		
+		$sql = sprintf('DELETE FROM `%s` WHERE %s LIMIT 1;', $table, implode(' AND ', $where));
+		
+		$conn->prepare($sql)->execute($params);
+		
+		$object->_setLoaded(false);			
+		
 		return true;
 	}
 	
 	
-	public static function update($object){
 	
-		$schema = $object::_getSchemaName();
-		$db = self::get($schema)->getConnection();
-	
-		$table = $object::_getTableName();
-		$data = $object->_getDataArray();
-		$dirty = $object->_getDirtyArray();
-		$keys = $object::_getKeys(Wave_DB_Column::INDEX_PRIMARY);
-		
-		$sql = "UPDATE $table SET ";
-		
-		$updates = array();
-		foreach($dirty as $key => $value){
-			if(!array_key_exists($key, $data)) continue;
-			
-			if($data[$key] === null || (is_string($data[$key]) && $data[$key] === ''))
-				$updates[] = "`$key` = NULL";
-			elseif($data[$key] instanceof DateTime)
-				$updates[] = "`$key` = '".$data[$key]->format('Y-m-d H:i:s')."'";
-			elseif(!is_object($data[$key]) && !is_array($data[$key]))
-				$updates[] = "`$key` = '".addslashes($data[$key])."'";
-		}
-
-		if(!isset($updates[0]))
-			return true;
-
-		//remove comma
-		$sql .= implode(', ', $updates);
-		
-		$sql .= " WHERE ";
-		
-		$_keys = array();		
-		foreach($keys as $key){
-			$_keys[] = "`$key` = '{$object->$key}'";
-		}
-		$sql .= implode(' AND ', $_keys);
-		
-		return $db->exec($sql);
-	}
 	
 	public function rawQuery($sql){
 		$db = $this->getConnection();
 		$db->exec($sql);
 	}
 	
-	//FOR BOTH OF THESE ^^^^^^^^^^
 	
 	
 	/**
 	* Function to return the results of a basic query
 	*/
 	public function basicQuery($sql, $params = array()){
-		
-		
 		$statement = $this->basicStatement($sql, $params);
-			
 		return $statement->fetchAll();
 	}
 	
@@ -167,13 +187,10 @@ class Wave_DB {
 	
 	public function isDefault(){
 		return isset($database->default) && $database->default == true;
-	}
-	
-	
+	}	
 
 	public static function init($database){
 	
-		
 		$installed_drivers = Wave_DB_Connection::getAvailableDrivers();
 
 		$driver_class = self::getDriverClass($database->driver);
@@ -195,25 +212,59 @@ class Wave_DB {
 		
 		self::$num_databases++;
 		
+
+		return self::$instances[$database->namespace];
+
 	}
 	
-	public static function get($namespace = null){
+	public static function get($namespace = null, $mode = null){
 
 		$databases = Wave_Config::get('db')->databases;
-		
-		//if no db spec, return default
-		if($namespace === null)
-			 $namespace = isset(self::$default) ? self::$default : $databases[0]['namespace'];
-		
-		if(!isset(self::$instances[$namespace])){
-			
-			foreach($databases as $database){
-				if($database->namespace === $namespace)
-					self::init($database);
-			}			
+
+		if($namespace === null){
+			if(isset(self::$default))
+				$namespace = self::$default;
+			else {
+				$namespace = self::getDefaultNamespace();
+			}
 		}
-		
-		return isset(self::$instances[$namespace]) ? self::$instances[$namespace] : null;	
+
+		if(!isset($databases[$namespace])){
+			throw new Wave_Exception("There is no database configuration for {$namespace}");
+		}
+
+		if($mode === null) 
+			$mode = isset($databases[$namespace][Wave_Core::$_MODE]) 
+					? Wave_Core::$_MODE 
+					: Wave_Core::MODE_PRODUCTION;
+
+		if(!isset($databases[$namespace][$mode])){
+			throw new Wave_Exception('There must be at least a PRODUCTION database defined');
+		}
+		else {
+			$databases[$namespace][$mode]->namespace = $namespace;
+			$databases[$namespace][$mode]->mode = $mode;
+
+			return isset(self::$instances[$namespace]) 
+				? self::$instances[$namespace] 
+				: self::init($databases[$namespace][$mode]);	
+		}
+	}
+
+	public static function set($namespace, Wave_DB_Connection $connection){
+		if(isset(self::$instances[$namespace])){
+			self::$instances[$namespace]->connection = $connection;
+			return self::$instances[$namespace];
+		}
+		return null;
+	}
+
+	public static function getDefaultNamespace(){
+		if(!Wave_Config::get('db')) return null;
+
+		foreach(Wave_Config::get('db')->databases as $ns => $database){
+			return $ns;
+		}
 	}
 	
 	public static function getNumDatabases(){
@@ -223,8 +274,8 @@ class Wave_DB {
 	public static function getAllDatabases(){
 
 		$databases = Wave_Config::get('db')->databases;
-		foreach($databases as $database)
-			self::init($database);
+		foreach($databases as $namespace => $modes)
+			self::get($namespace);
 		
 		return self::$instances;
 	}
