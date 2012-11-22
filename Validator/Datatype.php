@@ -64,28 +64,21 @@ abstract class Wave_Validator_Datatype {
             if     ($this->params['type'] === self::TYPE_ARRAY)  { $datatype = self::COMPARATOR_ARRAY;   }
             elseif ($this->params['type'] === self::TYPE_INT)    { $datatype = self::COMPARATOR_NUMERIC; }
             elseif ($this->params['type'] === self::TYPE_STRING) { $datatype = self::COMPARATOR_STRING;  }
+            else throw new Jade_Exception("Field type not specified");
 		}
 
 		// based on the comparator deduce the correct count to compare
 		$count = null;
-		if($datatype === self::COMPARATOR_ARRAY)
-			$count = count($this->input);
-		else if($datatype === self::COMPARATOR_NUMERIC)
-			$count = $this->input;
-		else if($datatype === self::COMPARATOR_STRING)
-			$count = strlen($this->input);
-		else
-			$count = $this->input;
+		if     ($datatype === self::COMPARATOR_ARRAY)   { $count = count($this->input);  }
+		elseif ($datatype === self::COMPARATOR_NUMERIC) { $count = $this->input;         }
+		elseif ($datatype === self::COMPARATOR_STRING)  { $count = strlen($this->input); }
+		else                                             { $count = $this->input;         }
 
 		//if the comparator is callable (is a function), return the result of that instead, otherwise do the standard op
 
-		if(is_callable($datatype))
-			return $datatype($comparator, $this->input, $limit);
-		else if($comparator == self::LENGTH_GT)
-			return $count >= $limit;
-		else
-			return $count <= $limit;
-
+		if     (is_callable($datatype))          { return $datatype($comparator, $this->input, $limit); }
+		elseif ($comparator == self::LENGTH_GT) { return $count >= $limit;                             }
+		else                                     { return $count <= $limit;                             }
 	}
 
 	protected function checkMembership($container){
