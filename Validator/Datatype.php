@@ -64,7 +64,7 @@ abstract class Wave_Validator_Datatype {
             if     ($this->params['type'] === self::TYPE_ARRAY)  { $datatype = self::COMPARATOR_ARRAY;   }
             elseif ($this->params['type'] === self::TYPE_INT)    { $datatype = self::COMPARATOR_NUMERIC; }
             elseif ($this->params['type'] === self::TYPE_STRING) { $datatype = self::COMPARATOR_STRING;  }
-            else throw new Jade_Exception("Field type not specified");
+            else throw new Wave_Exception("Field type not specified");
 		}
 
 		// based on the comparator deduce the correct count to compare
