@@ -33,6 +33,10 @@ abstract class Wave_Validator_Datatype {
 
 	}
 
+    /*
+     * This will not work as intended if a custom datatype calls `parent::validadte()` due to the assumptions of the
+     * `checkLength()` method
+     */
 	public function validate(){
 
 		if(isset($this->params[self::MIN_LENGTH]) && !$this->checkLength($this->params[self::MIN_LENGTH]))
@@ -61,13 +65,20 @@ abstract class Wave_Validator_Datatype {
 	protected function checkLength($limit, $comparator = self::LENGTH_GT, $datatype = null){
 		// establish a comparator
 		if ($datatype == null) {
-            if     ($this->params['type'] === self::TYPE_ARRAY)  { $datatype = self::COMPARATOR_ARRAY;   }
-            elseif ($this->params['type'] === self::TYPE_INT)    { $datatype = self::COMPARATOR_NUMERIC; }
-            elseif ($this->params['type'] === self::TYPE_STRING) { $datatype = self::COMPARATOR_STRING;  }
-            else throw new Wave_Exception("Field type not specified");
-		}
-
+			if (isset($this->params['type'])) {
+				if     ($this->params['type'] === self::TYPE_ARRAY)  { $datatype = self::COMPARATOR_ARRAY;   }
+				elseif ($this->params['type'] === self::TYPE_INT)    { $datatype = self::COMPARATOR_NUMERIC; }
+				elseif ($this->params['type'] === self::TYPE_STRING) { $datatype = self::COMPARATOR_STRING;  }
+			} else {
+				// try to guess if not specified
+				if     (is_array(  $this->input))                     { $datatype = self::COMPARATOR_ARRAY;   }
+				elseif (is_numeric($this->input))                     { $datatype = self::COMPARATOR_NUMERIC; }
+				elseif (is_string( $this->input))                     { $datatype = self::COMPARATOR_STRING;  }
+			}
+        }
 		// based on the comparator deduce the correct count to compare
+        // how to pass a callable comparator when most custom datatypes simply call `parent::validate()`? No datatype will
+        // be set in that situation, thus the comparisons below will not produce the intended outcome.
 		$count = null;
 		if     ($datatype === self::COMPARATOR_ARRAY)   { $count = count($this->input);  }
 		elseif ($datatype === self::COMPARATOR_NUMERIC) { $count = $this->input;         }
